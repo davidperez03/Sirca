@@ -1,0 +1,9 @@
+#variables de entorno
+.venv
+.env
+
+#cache
+__pycache__/
+
+#bases de datos locakes
+db.sqlite3

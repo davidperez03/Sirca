@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Página no encontrada</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f9;
+            color: #333;
+            text-align: center;
+            padding: 50px;
+            margin: 0;
+        }
+        .error-container {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        .error-container h1 {
+            font-size: 100px;
+            color: #e74c3c;
+            margin: 0;
+        }
+        .error-container p {
+            font-size: 18px;
+            margin: 10px 0;
+        }
+        .error-container a {
+            text-decoration: none;
+            color: #3498db;
+            font-weight: bold;
+            font-size: 16px;
+        }
+        .error-container a:hover {
+            text-decoration: underline;
+        }
+        .button-container {
+            margin-top: 20px;
+        }
+        .button-container a {
+            background-color: #3498db;
+            color: #fff;
+            padding: 10px 20px;
+            border-radius: 5px;
+            font-size: 16px;
+            text-decoration: none;
+        }
+        .button-container a:hover {
+            background-color: #2980b9;
+        }
+    </style>
+</head>
+<body>
+    <div class="error-container">
+        <h1>404</h1>
+        <p>{{ message }}</p>
+        <p>Lo sentimos, la página que buscas no está disponible.</p>
+        <div class="button-container">
+            <a href="/">Volver</a>
+        </div>
+    </div>
+</body>
+</html>
