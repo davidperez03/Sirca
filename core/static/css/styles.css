@@ -1,0 +1,50 @@
+:root {
+    /* Colores principales */
+    --color-institucional: #39a900;
+    --color-secundarios-1: #007832;
+    --color-secundarios-2: #00304d;
+    --color-secundarios-3: #71277a;
+    --color-secundarios-4: #50e5f9;
+    --color-secundarios-5: #fdc300;
+    --color-blanco: #ffffff;
+    --color-negro: #000000;
+    --color-neutro: #f6f6f6;
+
+    --color-fondo: #f0f4f8;
+    --color-texto: #333333;
+    --color-acento: #f59e0b;
+
+    /* Tipografías */
+    --fuente-principal: 'Work Sans', sans-serif;
+    --fuente-secundaria: 'Calibri', sans-serif;
+
+    /* Tamaños */
+    --tamaño-fuente-base: 16px;
+    --tamaño-fuente-titulo: 24px;
+    --tamaño-fuente-subtitulo: 20px;
+
+    /* Espaciados*/
+    --espaciado-xxs: 0.25rem;
+    --espaciado-xs: 0.5rem;
+    --espaciado-sm: 0.75rem;
+    --espaciado-md: 1rem;
+    --espaciado-lg: 1.5rem;
+    --espaciado-xl: 2rem;
+    --espaciado-xxl: 3rem;
+
+
+    /* Alturas y otros */
+    --alto-header: 60px;
+
+    /* Estados */
+    --color-exito: #28a745;
+    --color-advertencia: #ffc107;
+    --color-error: #dc3545;
+
+    /* Breakpoints */
+    --breakpoint-movil: 480px;
+    --breakpoint-tablet: 768px;
+    --breakpoint-desktop: 1024px;
+}
+
+
