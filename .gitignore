@@ -5,5 +5,5 @@
 #cache
 __pycache__/
 
-#bases de datos locakes
+#bases de datos locales
 db.sqlite3
