@@ -4,23 +4,61 @@
 
 {% block content %}
 <div class="row justify-content-center">
-    <div class="col-md-6">
-        <h2 class="mb-4">Ingreso al Sistema</h2>
-        <form method="post">
-            {% csrf_token %}
-            <div class="mb-3">
-                <label for="numero_documento" class="form-label">Número de Documento</label>
-                <input type="text" class="form-control" id="numero_documento" name="numero_documento" required>
+    <div class="col-md-5">
+        <div class="card shadow-lg border-0 rounded-4">
+            <div class="card-body p-4">
+                <div class="d-flex align-items-center justify-content-between mb-3">
+                    <a href="javascript:history.back()" class="btn btn-outline-secondary btn-sm">
+                        <i class="bi bi-arrow-left"></i>
+                    </a>
+                    <h2 class="mb-0 text-center flex-grow-1 fw-bold">Ingreso al Sistema</h2>
+                    <span class="btn btn-sm invisible"></span> <!-- Espaciador para mantener la simetría -->
+                </div>
+
+                <form method="post">
+                    {% csrf_token %}
+
+                    <div class="mb-3">
+                        <label for="numero_documento" class="form-label fw-semibold">Número de Documento</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-primary text-white">
+                                <i class="bi bi-person-badge"></i>
+                            </span>
+                            <input type="text" class="form-control" id="numero_documento" name="numero_documento" required>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="password" class="form-label fw-semibold">Contraseña</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-primary text-white">
+                                <i class="bi bi-key-fill"></i>
+                            </span>
+                            <input type="password" class="form-control" id="password" name="password" required>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary w-100 d-flex align-items-center justify-content-center py-2">
+                        <i class="bi bi-box-arrow-in-right me-2"></i> Ingresar
+                    </button>
+                </form>
+
+                <div class="text-center mt-4">
+                    <p class="mb-2">¿No tienes una cuenta?</p>
+                    <a href="{% url 'registro' %}" class="btn btn-outline-primary w-100 d-flex align-items-center justify-content-center py-2">
+                        <i class="bi bi-person-plus me-2"></i> Regístrate aquí
+                    </a>
+
+                    <hr class="my-3">
+
+                    <p class="mb-2">¿Olvidaste tu contraseña?</p>
+                    <a href="{% url 'recuperar_password' %}" class="btn btn-outline-secondary w-100 d-flex align-items-center justify-content-center py-2">
+                        <i class="bi bi-unlock me-2"></i> Recuperar contraseña
+                    </a>
+                </div>
             </div>
-            <div class="mb-3">
-                <label for="password" class="form-label">Contraseña</label>
-                <input type="password" class="form-control" id="password" name="password" required>
-            </div>
-            <button type="submit" class="btn btn-primary">Ingresar</button>
-        </form>
-        <p class="mt-3">¿No tienes una cuenta? <a href="{% url 'registro' %}">Regístrate aquí</a>.</p>
-        <p>¿Olvidaste tu contraseña? <a href="#">Recuperar contraseña</a>.</p>
+        </div>
     </div>
 </div>
 {% endblock %}
-
+    

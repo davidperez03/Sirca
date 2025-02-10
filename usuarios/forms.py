@@ -52,7 +52,7 @@ class FormularioCreacionUsuario(UserCreationForm):
         return rol
 
 class FormularioReenvioActivacion(forms.Form):
-    correo = forms.EmailField(
+    correo_institucional = forms.EmailField(
         label="Correo Institucional",
         widget=forms.EmailInput(attrs={'class': 'form-control'})
     )

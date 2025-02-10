@@ -1,163 +1,410 @@
 from django.shortcuts import render, redirect
+from django.contrib.auth import authenticate, login
 from django.contrib import messages
 from django.views import View
-from django.utils.crypto import get_random_string
+from django.conf import settings
 from django.urls import reverse
 from django.utils import timezone
-from .forms import FormularioCreacionUsuario, FormularioReenvioActivacion
-from .utils import enviar_correo_activacion
-from .models import AuditoriaRegistro, Usuario
+from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
-from uuid import UUID   
+from django.views.decorators.csrf import csrf_protect
+from django.views.decorators.cache import never_cache, cache_page
+from django.utils.decorators import method_decorator
+from django.db import transaction
+from functools import wraps
+from uuid import UUID
+import uuid
+import logging
 
-class RegistroUsuarioView(View):
+
+from .forms import FormularioCreacionUsuario, FormularioReenvioActivacion
+from .utils import enviar_correo_activacion, enviar_correo_recuperacion
+from .models import AuditoriaRegistro, Usuario
+
+# Configurar logger
+logger = logging.getLogger(__name__)
+
+def rate_limit(key_prefix, limit=5, period=300):
+    """
+    Decorador para limitar el número de intentos en un período de tiempo.
+    """
+    def decorator(view_func):
+        @wraps(view_func)
+        def _wrapped_view(request, *args, **kwargs):
+            client_ip = request.META.get('REMOTE_ADDR')
+            cache_key = f"{key_prefix}_{client_ip}"
+            
+            # Obtener el número actual de intentos
+            attempts = cache.get(cache_key, 0)
+            
+            if attempts >= limit:
+                logger.warning(f"Rate limit exceeded for IP: {client_ip}")
+                messages.error(request, 'Has excedido el límite de intentos. Espera unos minutos.')
+                return redirect('ingreso')
+            
+            response = view_func(request, *args, **kwargs)
+            
+            # Si la solicitud no fue exitosa, aumentar el contador
+            if response.status_code != 302:  # 302 indica redirección (éxito)
+                cache.set(cache_key, attempts + 1, period)
+            else:
+                cache.delete(cache_key)  # Si fue exitoso, resetear el contador
+            
+            return response
+        
+        return _wrapped_view
+    return decorator
+
+class BaseView(View):
+    """Vista base con funcionalidad común"""
+    
+    @method_decorator(csrf_protect)
+    @method_decorator(never_cache)
+    def dispatch(self, *args, **kwargs):
+        return super().dispatch(*args, **kwargs)
+
+
+    def log_action(self, action, details, usuario=None, level='INFO'):
+        """Método centralizado para logging y auditoría"""
+        try:
+            AuditoriaRegistro.objects.create(
+                usuario=usuario,
+                accion=action,
+                detalles=details
+            )
+            
+            if level == 'INFO':
+                logger.info(f"{action}: {details}")
+            elif level == 'WARNING':
+                logger.warning(f"{action}: {details}")
+            elif level == 'ERROR':
+                logger.error(f"{action}: {details}")
+                
+        except Exception as e:
+            logger.error(f"Error al registrar auditoría: {str(e)}")
+
+class RegistroUsuarioView(BaseView):
     template_name = 'usuarios/registro.html'
+
+    @method_decorator(rate_limit('registro', limit=10, period=3600))
+    def post(self, request):
+        form = FormularioCreacionUsuario(request.POST)
+        if form.is_valid():
+            try:
+                with transaction.atomic():
+                    usuario = form.save(commit=False)
+                    
+                    # Validar correo
+                    try:
+                        validate_email(usuario.correo_institucional)
+                        dominio = usuario.correo_institucional.split('@')[-1].lower()
+                        
+                        if dominio not in settings.ALLOWED_EMAIL_DOMAINS:
+                            raise ValidationError(
+                                f"El correo debe pertenecer a: {', '.join(settings.ALLOWED_EMAIL_DOMAINS)}"
+                            )
+                    
+                    except ValidationError as e:
+                        form.add_error('correo_institucional', str(e))
+                        return render(request, self.template_name, {'form': form})
+
+                    if not usuario.rol:
+                        form.add_error('rol', "Debe seleccionar un rol válido.")
+                        return render(request, self.template_name, {'form': form})
+
+                    # Configurar usuario
+                    usuario.is_active = False
+                    usuario.correo_institucional = usuario.correo_institucional.lower()
+                    usuario.generar_nuevo_token()
+                    usuario.save()
+                    
+                    # Enviar correo
+                    try:
+                        enviar_correo_activacion(usuario)
+                    except Exception as e:
+                        logger.error(f"Error al enviar correo: {str(e)}")
+                        raise ValidationError("Error al enviar el correo de activación.")
+                    
+                    self.log_action(
+                        'Registro de usuario',
+                        f'Usuario registrado con rol: {usuario.rol.nombre if usuario.rol else "Sin rol"}',
+                        usuario=usuario
+                    )
+                    
+                    return redirect(reverse('confirmacion_registro'))
+                    
+            except Exception as e:
+                logger.error(f"Error en registro: {str(e)}")
+                messages.error(request, "Ocurrió un error durante el registro. Por favor, intenta nuevamente.")
+                
+        return render(request, self.template_name, {'form': form})
 
     def get(self, request):
         form = FormularioCreacionUsuario()
         return render(request, self.template_name, {'form': form})
 
-    def post(self, request):
-        form = FormularioCreacionUsuario(request.POST)
-        if form.is_valid():
-            usuario = form.save(commit=False)
-            
-            DOMINIOS_PERMITIDOS = ["soy.sena.edu.co", "gmail.com", "misena.edu.co"]
-
-            try:
-                validate_email(usuario.correo_institucional)  
-                dominio = usuario.correo_institucional.split('@')[-1].lower()  
-                
-                if dominio not in DOMINIOS_PERMITIDOS:
-                    raise ValidationError("El correo debe pertenecer a @soy.sena.edu.co o @misena.edu.co.")
-            
-            except ValidationError:
-                form.add_error('correo_institucional', "El correo institucional no es válido.")
-                return render(request, self.template_name, {'form': form})
-
-            if not usuario.rol:
-                form.add_error('rol', "Debe seleccionar un rol válido.")
-                return render(request, self.template_name, {'form': form})
-
-            usuario.is_active = False
-            usuario.generar_nuevo_token()
-            usuario.save()
-            
-            enviar_correo_activacion(usuario)
-            
-            AuditoriaRegistro.objects.create(
-                usuario=usuario,
-                accion='Registro de usuario',
-                detalles=f'Usuario registrado con rol: {usuario.rol.nombre if usuario.rol else "Sin rol"}, esperando activación'
-            )
-            
-            return redirect(reverse('confirmacion_registro'))
-        return render(request, self.template_name, {'form': form})
-
-class ConfirmacionRegistroView(View):
+class ConfirmacionRegistroView(BaseView):
     template_name = 'usuarios/confirmacion_registro.html'
-
+    
+    @method_decorator(cache_page(60 * 15))  # Cache por 15 minutos
     def get(self, request):
         return render(request, self.template_name)
 
-class ActivarCuentaView(View):
+class ActivarCuentaView(BaseView):
+    @transaction.atomic
     def get(self, request, token):
         try:
             uuid_token = UUID(token, version=4)
-            usuario = Usuario.objects.get(activation_token=uuid_token)
+            usuario = Usuario.objects.select_for_update().get(activation_token=uuid_token)
 
             if not usuario.is_active:
                 if timezone.now() > usuario.token_expiracion:
+                    self.log_action(
+                        'Token expirado',
+                        f'Token expirado para usuario: {usuario.correo_institucional}',
+                        usuario=usuario,
+                        level='WARNING'
+                    )
                     messages.error(request, 'El enlace de activación ha expirado. Por favor, solicita uno nuevo.')
                     return redirect('reenviar_activacion')
                 
                 usuario.is_active = True
                 usuario.activation_token = None
                 usuario.save()
-                AuditoriaRegistro.objects.create(
-                    usuario=usuario,
-                    accion='Activación de cuenta',
-                    detalles='Cuenta activada exitosamente'
+                
+                self.log_action(
+                    'Activación de cuenta',
+                    'Cuenta activada exitosamente',
+                    usuario=usuario
                 )
                 messages.success(request, '¡Tu cuenta ha sido activada exitosamente! Ahora puedes iniciar sesión.')
             else:
                 messages.info(request, 'Esta cuenta ya está activa.')
-        except Usuario.DoesNotExist:
+                
+        except (ValueError, TypeError):
+            logger.warning(f"Intento de activación con token inválido: {token}")
             messages.error(request, 'El enlace de activación no es válido.')
+        except Usuario.DoesNotExist:
+            logger.warning(f"Intento de activación con token no existente: {token}")
+            messages.error(request, 'El enlace de activación no es válido.')
+        except Exception as e:
+            logger.error(f"Error en activación de cuenta: {str(e)}")
+            messages.error(request, 'Ocurrió un error al activar la cuenta. Por favor, intenta nuevamente.')
         
         return redirect('ingreso')
 
-class ReenviarActivacionView(View):
+class ReenviarActivacionView(BaseView):
     template_name = 'usuarios/reenviar_activacion.html'
-
+    
     def get(self, request):
         form = FormularioReenvioActivacion()
         return render(request, self.template_name, {'form': form})
-
+    
+    @method_decorator(rate_limit('reenvio_activacion', limit=3, period=900))  # 3 intentos cada 15 minutos
+    @transaction.atomic
     def post(self, request):
         form = FormularioReenvioActivacion(request.POST)
+        mensaje_generico = "Si existe una cuenta asociada a este correo, recibirás un enlace de activación."
+        
         if form.is_valid():
-            correo = form.cleaned_data.get('correo').lower().strip()  
+            correo = form.cleaned_data['correo_institucional'].lower()
+            
             try:
-                # Usar iexact para búsqueda insensible a mayúsculas/minúsculas
-                usuario = Usuario.objects.get(correo_institucional__iexact=correo)
+                usuario = Usuario.objects.select_for_update().get(
+                    correo_institucional=correo,
+                    is_active=False
+                )
                 
-                # Verificar si la cuenta ya está activa
-                if usuario.is_active:
-                    messages.error(request, 'Esta cuenta ya está activa. No es necesario reenviar el correo de activación.')
-                    AuditoriaRegistro.objects.create(
+                # Verificar límites de reenvío
+                ahora = timezone.now()
+                if usuario.ultimo_reenvio and (ahora - usuario.ultimo_reenvio) < timezone.timedelta(minutes=1):
+                    self.log_action(
+                        'Intento de reenvío frecuente',
+                        f'Intento de reenvío muy frecuente para: {correo}',
                         usuario=usuario,
-                        accion='Intento de reenvío de activación',
-                        detalles='Se intentó reenviar correo de activación a una cuenta ya activa'
+                        level='WARNING'
                     )
-                    return redirect('ingreso')
+                    messages.warning(request, "Por favor espera 1 minuto antes de solicitar otro correo.")
+                    return render(request, self.template_name, {'form': form})
                 
-                # Si la cuenta no está activa, verificar límites de reenvío
-                if usuario.puede_reenviar_correo():
-                    usuario.generar_nuevo_token()
-                    usuario.contador_reenvios += 1
-                    usuario.ultimo_reenvio = timezone.now()
-                    usuario.save()
-                    
-                    try:
-                        enviar_correo_activacion(usuario)
-                        messages.success(request, 'Se ha reenviado el correo de activación.')
-                        
-                        AuditoriaRegistro.objects.create(
-                            usuario=usuario,
-                            accion='Reenvío de correo de activación',
-                            detalles=f'Reenvío exitoso. Contador: {usuario.contador_reenvios}'
-                        )
-                    except Exception as e:
-                        messages.error(request, 'Hubo un error al enviar el correo. Por favor, intenta nuevamente.')
-                        AuditoriaRegistro.objects.create(
-                            usuario=usuario,
-                            accion='Error en reenvío',
-                            detalles=f'Error al enviar correo: {str(e)}'
-                        )
-                else:
-                    messages.error(request, 'Has excedido el límite de reenvíos. Por favor, contacta al soporte.')
-                    AuditoriaRegistro.objects.create(
+                if usuario.contador_reenvios >= settings.MAX_ACTIVATION_RESENDS:
+                    self.log_action(
+                        'Límite de reenvíos excedido',
+                        f'Límite excedido para: {correo}',
                         usuario=usuario,
-                        accion='Límite de reenvíos excedido',
-                        detalles=f'Se intentó reenviar pero se excedió el límite. Contador: {usuario.contador_reenvios}'
+                        level='WARNING'
                     )
-                return redirect('ingreso')
+                    messages.error(request, "Has excedido el límite de reenvíos. Contacta a soporte.")
+                    return render(request, self.template_name, {'form': form})
+                
+                # Actualizar usuario
+                usuario.generar_nuevo_token()
+                usuario.contador_reenvios += 1
+                usuario.ultimo_reenvio = ahora
+                usuario.save()
+                
+                # Enviar correo
+                try:
+                    enviar_correo_activacion(usuario)
+                    self.log_action(
+                        'Reenvío de activación',
+                        f'Correo de activación reenviado a: {correo}',
+                        usuario=usuario
+                    )
+                except Exception as e:
+                    logger.error(f"Error al reenviar correo: {str(e)}")
+                    raise ValidationError("Error al enviar el correo de activación.")
                 
             except Usuario.DoesNotExist:
-                # Agregar registro de auditoría para intentos fallidos
-                AuditoriaRegistro.objects.create(
-                    usuario=None,
-                    accion='Intento fallido de reenvío',
-                    detalles=f'Correo no encontrado: {correo}'
-                )
-                messages.error(request, f'No se encontró ninguna cuenta con el correo: {correo}')
+                # No revelamos si el correo existe o no
+                logger.info(f"Intento de reenvío para correo no existente: {correo}")
+            except Exception as e:
+                logger.error(f"Error en reenvío de activación: {str(e)}")
+                messages.error(request, "Ocurrió un error. Por favor, intenta nuevamente.")
+                return render(request, self.template_name, {'form': form})
         
+        messages.success(request, mensaje_generico)
         return render(request, self.template_name, {'form': form})
 
-class IngresoView(View):
-    template_name = 'usuarios/ingreso.html'
 
+class RecuperarPasswordView(BaseView):
+    template_name = 'usuarios/recuperar_password.html'
+    
     def get(self, request):
         return render(request, self.template_name)
+    
+    @method_decorator(rate_limit('recuperar_password', limit=3, period=900))  # 3 intentos cada 15 minutos
+    @transaction.atomic
+    def post(self, request):
+        correo = request.POST.get('correo_institucional')
+        mensaje_generico = "Si existe una cuenta asociada a este correo, recibirás instrucciones para restablecer tu contraseña."
+        
+        try:
+            usuario = Usuario.objects.select_for_update().get(correo_institucional=correo)
+            
+            # Generar nuevo token
+            usuario.reset_password_token = uuid.uuid4()
+            usuario.reset_password_token_created = timezone.now()
+            usuario.save()
+            
+            # Enviar correo
+            enviar_correo_recuperacion(usuario)
+            
+            # Registrar en auditoría
+            AuditoriaRegistro.objects.create(
+                usuario=usuario,
+                accion='Solicitud de recuperación de contraseña',
+                detalles=f'Correo de recuperación enviado a {usuario.correo_institucional}'
+            )
+            
+            self.log_action(
+                'Solicitud de recuperación de contraseña',
+                f'Correo de recuperación enviado a {usuario.correo_institucional}',
+                usuario=usuario
+            )
+            
+        except Usuario.DoesNotExist:
+            logger.info(f"Intento de recuperación para correo no existente: {correo}")
+            pass  # No revelamos si el correo existe
+        except Exception as e:
+            logger.error(f"Error en recuperación de contraseña: {str(e)}")
+            messages.error(request, "Ocurrió un error. Por favor, intenta nuevamente.")
+            return render(request, self.template_name)
+        
+        messages.success(request, mensaje_generico)
+        return render(request, self.template_name)
+
+class ResetearPasswordView(View):
+    template_name = 'usuarios/resetear_password.html'
+
+    def get(self, request, token):
+        try:
+            usuario = Usuario.objects.get(reset_password_token=token)
+            
+            # Verificar si el token ha expirado (ejemplo: 30 minutos de validez)
+            tiempo_limite = usuario.reset_password_token_created + timezone.timedelta(minutes=30)
+            if timezone.now() > tiempo_limite:
+                messages.error(request, "El enlace de recuperación ha expirado.")
+                return redirect('recuperar_password')
+
+            return render(request, self.template_name, {'token': token})
+
+        except Usuario.DoesNotExist:
+            messages.error(request, "El enlace de recuperación no es válido.")
+            return redirect('recuperar_password')
+
+    @transaction.atomic
+    def post(self, request, token):
+        nueva_password = request.POST.get('password')
+        confirmar_password = request.POST.get('confirmar_password')
+
+        if nueva_password != confirmar_password:
+            messages.error(request, "Las contraseñas no coinciden.")
+            return render(request, self.template_name, {'token': token})
+
+        try:
+            usuario = Usuario.objects.get(reset_password_token=token)
+            
+            # Verificar si el token ha expirado
+            tiempo_limite = usuario.reset_password_token_created + timezone.timedelta(minutes=30)
+            if timezone.now() > tiempo_limite:
+                messages.error(request, "El enlace de recuperación ha expirado.")
+                return redirect('recuperar_password')
+
+            # Guardar la nueva contraseña y resetear el token
+            usuario.set_password(nueva_password)
+            usuario.reset_password_token = None
+            usuario.reset_password_token_created = None
+            usuario.save()
+
+            messages.success(request, "Tu contraseña ha sido actualizada con éxito.")
+            return redirect('ingreso')
+
+        except Usuario.DoesNotExist:
+            messages.error(request, "El enlace de recuperación no es válido.")
+            return redirect('recuperar_password')
+
+
+
+class IngresoView(BaseView):
+    template_name = 'usuarios/ingreso.html'
+    
+    def get(self, request):
+        return render(request, self.template_name)
+    
+    def post(self, request):
+        numero_documento = request.POST.get('numero_documento')
+        password = request.POST.get('password')
+        
+        try:
+            # Primero verificamos si el usuario existe
+            usuario = Usuario.objects.get(numero_documento=numero_documento)
+            
+            # Si existe pero no está activo
+            if not usuario.is_active:
+                messages.warning(
+                    request, 
+                    'Tu cuenta no está activada. Por favor, actívala para continuar.'
+                )
+                return redirect('reenviar_activacion')
+            
+            # Si está activo, intentamos autenticar
+            usuario_auth = authenticate(request, numero_documento=numero_documento, password=password)
+            if usuario_auth is not None:
+                login(request, usuario_auth)
+                return redirect('inicio')
+            else:
+                messages.error(request, 'Contraseña incorrecta.')
+                
+        except Usuario.DoesNotExist:
+            messages.error(request, 'No existe un usuario con ese número de documento.')
+        
+        return render(request, self.template_name)
+    
+class InicioView(BaseView):
+    template_name = 'usuarios/inicio.html'
+    
+    def get(self, request):
+        return render(request, self.template_name)
+

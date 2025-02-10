@@ -56,8 +56,22 @@ class Usuario(AbstractUser):
     is_active = models.BooleanField(default=False)
     activation_token = models.UUIDField(default=uuid.uuid4, editable=False, unique=True, null=True, blank=True) 
     activation_token_created = models.DateTimeField(default=timezone.now)
-    email_sent_count = models.IntegerField(default=0)
-    last_email_sent = models.DateTimeField(null=True, blank=True)
+
+    token_expiracion = models.DateTimeField(null=True, blank=True)
+    contador_reenvios = models.IntegerField(default=0)
+    ultimo_reenvio = models.DateTimeField(null=True, blank=True)
+
+    reset_password_token = models.UUIDField(null=True, blank=True)
+    reset_password_token_created = models.DateTimeField(null=True, blank=True)
+
+    def generar_nuevo_token(self):
+        """
+        Genera un nuevo token de activación y establece su fecha de expiración
+        """
+        self.activation_token = uuid.uuid4()
+        self.activation_token_created = timezone.now()
+        # Token válido por 24 horas
+        self.token_expiracion = self.activation_token_created + timezone.timedelta(hours=24)
 
     USERNAME_FIELD = 'numero_documento'
     REQUIRED_FIELDS = ['tipo_documento', 'correo_institucional', 'nombres', 'apellidos']
@@ -66,28 +80,6 @@ class Usuario(AbstractUser):
 
     def __str__(self):
         return f"{self.nombres} {self.apellidos} ({self.numero_documento})"
-
-    def generate_new_activation_token(self):
-        self.activation_token = uuid.uuid4()
-        self.activation_token_created = timezone.now()
-        self.save()
-    
-    token_expiracion = models.DateTimeField(null=True, blank=True)
-    contador_reenvios = models.IntegerField(default=0)
-    ultimo_reenvio = models.DateTimeField(null=True, blank=True)
-
-    def generar_nuevo_token(self):
-        self.activation_token = uuid.uuid4()
-        self.activation_token_created = timezone.now()
-        self.token_expiracion = timezone.now() + timezone.timedelta(minutes=60) 
-        self.save()
-
-    def puede_reenviar_correo(self):
-        if self.contador_reenvios >= 3:  # Límite de 3 reenvíos
-            return False
-        if self.ultimo_reenvio:
-            tiempo_desde_ultimo_reenvio = timezone.now() - self.ultimo_reenvio
-            return tiempo_desde_ultimo_reenvio > timezone.timedelta(minutes=5) 
 
     class Meta:
         verbose_name = _('usuario')
@@ -101,4 +93,3 @@ class AuditoriaRegistro(models.Model):
 
     def __str__(self):
         return f"{self.usuario} - {self.accion} - {self.fecha}"
-

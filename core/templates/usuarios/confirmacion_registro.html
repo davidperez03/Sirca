@@ -5,12 +5,25 @@
 {% block content %}
 <div class="row justify-content-center">
     <div class="col-md-6">
-        <h2 class="mb-4">Confirmación de Registro</h2>
-        <div class="alert alert-success">
-            <p>Tu registro ha sido exitoso. Por favor, revisa tu correo electrónico para activar tu cuenta.</p>
+        <h2 class="mb-4 text-center">Confirmación de Registro</h2>
+        <div class="alert alert-success d-flex align-items-center" role="alert">
+            <i class="bi bi-check-circle-fill me-2"></i>
+            <p class="mb-0">
+                Tu registro ha sido exitoso. Por favor, revisa tu correo electrónico para activar tu cuenta.
+            </p>
         </div>
-        <p>Si no has recibido el correo, puedes <a href="{% url 'reenviar_activacion' %}">solicitar un nuevo enlace de activación</a>.</p>
+
+        <div class="text-center mt-4">
+            <a href="{% url 'reenviar_activacion' %}" class="btn btn-outline-primary d-flex align-items-center justify-content-center">
+                <i class="bi bi-envelope-at-fill me-2"></i> Solicitar nuevo enlace de activación
+            </a>
+        </div>
+
+        <div class="text-center mt-3">
+            <a href="{% url 'ingreso' %}" class="btn btn-outline-secondary d-flex align-items-center justify-content-center">
+                <i class="bi bi-arrow-left-circle me-2"></i> Volver al inicio de sesión
+            </a>
+        </div>
     </div>
 </div>
 {% endblock %}
-

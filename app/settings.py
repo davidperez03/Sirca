@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 """
 import environ
 import os
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -151,3 +152,60 @@ EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD')
 
 # URL Base del Sitio
 BASE_URL = env('BASE_URL', default='http://localhost:8000')
+
+# Dominios permitidos para el registro de usuarios
+ALLOWED_EMAIL_DOMAINS = ["soy.sena.edu.co", "gmail.com", "misena.edu.co"]
+
+# Ruta de la carpeta logs
+LOGGING_DIR = os.path.join(BASE_DIR, 'logs')
+
+# Crear la carpeta logs si no existe
+if not os.path.exists(LOGGING_DIR):
+    os.makedirs(LOGGING_DIR)
+
+# Configuración de logging
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {module} {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'file': {
+            'level': 'INFO',
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': os.path.join(LOGGING_DIR, 'debug.log'),
+            'maxBytes': 5 * 1024 * 1024,  # 5MB por archivo
+            'backupCount': 3,  # Mantiene 3 archivos antiguos
+            'formatter': 'verbose',
+        },
+        'error_file': {
+            'level': 'ERROR',
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': os.path.join(LOGGING_DIR, 'errors.log'),
+            'maxBytes': 2 * 1024 * 1024,  # 2MB por archivo
+            'backupCount': 2,  # Mantiene 2 archivos antiguos
+            'formatter': 'verbose',
+        },
+    },
+    'loggers': {
+        '': {  # Root logger
+            'handlers': ['file', 'error_file'],
+            'level': 'INFO',
+            'propagate': True,
+        },
+    },
+}
+
+# Cache configuration
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'unique-snowflake',
+    }
+}
+
+MAX_ACTIVATION_RESENDS = 3  
