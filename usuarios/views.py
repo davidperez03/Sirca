@@ -18,8 +18,17 @@ import uuid
 import logging
 
 
-from .forms import FormularioCreacionUsuario, FormularioReenvioActivacion
-from .utils import enviar_correo_activacion, enviar_correo_recuperacion
+from .forms import( 
+    FormularioCreacionUsuario, 
+    FormularioReenvioActivacion,
+    FormularioIngreso, 
+    FormularioRecuperarPassword, 
+    FormularioResetearPassword
+)
+from .utils import( 
+    enviar_correo_activacion, 
+    enviar_correo_recuperacion
+)
 from .models import AuditoriaRegistro, Usuario
 
 # Configurar logger
@@ -272,63 +281,59 @@ class RecuperarPasswordView(BaseView):
     template_name = 'usuarios/recuperar_password.html'
     
     def get(self, request):
-        return render(request, self.template_name)
+        form = FormularioRecuperarPassword()
+        return render(request, self.template_name, {'form': form})
     
-    @method_decorator(rate_limit('recuperar_password', limit=3, period=900))  # 3 intentos cada 15 minutos
+    @method_decorator(rate_limit('recuperar_password', limit=3, period=900))
     @transaction.atomic
     def post(self, request):
-        correo = request.POST.get('correo_institucional')
+        form = FormularioRecuperarPassword(request.POST)
         mensaje_generico = "Si existe una cuenta asociada a este correo, recibirás instrucciones para restablecer tu contraseña."
         
-        try:
-            usuario = Usuario.objects.select_for_update().get(correo_institucional=correo)
-            
-            # Generar nuevo token
-            usuario.reset_password_token = uuid.uuid4()
-            usuario.reset_password_token_created = timezone.now()
-            usuario.save()
-            
-            # Enviar correo
-            enviar_correo_recuperacion(usuario)
-            
-            # Registrar en auditoría
-            AuditoriaRegistro.objects.create(
-                usuario=usuario,
-                accion='Solicitud de recuperación de contraseña',
-                detalles=f'Correo de recuperación enviado a {usuario.correo_institucional}'
-            )
-            
-            self.log_action(
-                'Solicitud de recuperación de contraseña',
-                f'Correo de recuperación enviado a {usuario.correo_institucional}',
-                usuario=usuario
-            )
-            
-        except Usuario.DoesNotExist:
-            logger.info(f"Intento de recuperación para correo no existente: {correo}")
-            pass  # No revelamos si el correo existe
-        except Exception as e:
-            logger.error(f"Error en recuperación de contraseña: {str(e)}")
-            messages.error(request, "Ocurrió un error. Por favor, intenta nuevamente.")
-            return render(request, self.template_name)
+        if form.is_valid():
+            correo = form.cleaned_data['correo_institucional']
+            try:
+                usuario = Usuario.objects.select_for_update().get(
+                    correo_institucional=correo
+                )
+                
+                usuario.reset_password_token = uuid.uuid4()
+                usuario.reset_password_token_created = timezone.now()
+                usuario.save()
+                
+                enviar_correo_recuperacion(usuario)
+                
+                self.log_action(
+                    'Solicitud de recuperación de contraseña',
+                    f'Correo de recuperación enviado a {usuario.correo_institucional}',
+                    usuario=usuario
+                )
+                
+            except Usuario.DoesNotExist:
+                logger.info(f"Intento de recuperación para correo no existente: {correo}")
+            except Exception as e:
+                logger.error(f"Error en recuperación de contraseña: {str(e)}")
+                messages.error(request, "Ocurrió un error. Por favor, intenta nuevamente.")
+                return render(request, self.template_name, {'form': form})
         
         messages.success(request, mensaje_generico)
-        return render(request, self.template_name)
+        return render(request, self.template_name, {'form': form})
+    
 
-class ResetearPasswordView(View):
+class ResetearPasswordView(BaseView):
     template_name = 'usuarios/resetear_password.html'
 
     def get(self, request, token):
         try:
             usuario = Usuario.objects.get(reset_password_token=token)
             
-            # Verificar si el token ha expirado (ejemplo: 30 minutos de validez)
             tiempo_limite = usuario.reset_password_token_created + timezone.timedelta(minutes=30)
             if timezone.now() > tiempo_limite:
                 messages.error(request, "El enlace de recuperación ha expirado.")
                 return redirect('recuperar_password')
 
-            return render(request, self.template_name, {'token': token})
+            form = FormularioResetearPassword()
+            return render(request, self.template_name, {'form': form, 'token': token})
 
         except Usuario.DoesNotExist:
             messages.error(request, "El enlace de recuperación no es válido.")
@@ -336,75 +341,75 @@ class ResetearPasswordView(View):
 
     @transaction.atomic
     def post(self, request, token):
-        nueva_password = request.POST.get('password')
-        confirmar_password = request.POST.get('confirmar_password')
+        form = FormularioResetearPassword(request.POST)
+        if form.is_valid():
+            try:
+                usuario = Usuario.objects.get(reset_password_token=token)
+                
+                tiempo_limite = usuario.reset_password_token_created + timezone.timedelta(minutes=30)
+                if timezone.now() > tiempo_limite:
+                    messages.error(request, "El enlace de recuperación ha expirado.")
+                    return redirect('recuperar_password')
 
-        if nueva_password != confirmar_password:
-            messages.error(request, "Las contraseñas no coinciden.")
-            return render(request, self.template_name, {'token': token})
+                usuario.set_password(form.cleaned_data['password'])
+                usuario.reset_password_token = None
+                usuario.reset_password_token_created = None
+                usuario.save()
 
-        try:
-            usuario = Usuario.objects.get(reset_password_token=token)
-            
-            # Verificar si el token ha expirado
-            tiempo_limite = usuario.reset_password_token_created + timezone.timedelta(minutes=30)
-            if timezone.now() > tiempo_limite:
-                messages.error(request, "El enlace de recuperación ha expirado.")
+                messages.success(request, "Tu contraseña ha sido actualizada con éxito.")
+                return redirect('ingreso')
+
+            except Usuario.DoesNotExist:
+                messages.error(request, "El enlace de recuperación no es válido.")
                 return redirect('recuperar_password')
-
-            # Guardar la nueva contraseña y resetear el token
-            usuario.set_password(nueva_password)
-            usuario.reset_password_token = None
-            usuario.reset_password_token_created = None
-            usuario.save()
-
-            messages.success(request, "Tu contraseña ha sido actualizada con éxito.")
-            return redirect('ingreso')
-
-        except Usuario.DoesNotExist:
-            messages.error(request, "El enlace de recuperación no es válido.")
-            return redirect('recuperar_password')
-
+        
+        return render(request, self.template_name, {'form': form, 'token': token})
 
 
 class IngresoView(BaseView):
     template_name = 'usuarios/ingreso.html'
     
     def get(self, request):
-        return render(request, self.template_name)
+        form = FormularioIngreso()
+        return render(request, self.template_name, {'form': form})
     
     def post(self, request):
-        numero_documento = request.POST.get('numero_documento')
-        password = request.POST.get('password')
-        
-        try:
-            # Primero verificamos si el usuario existe
-            usuario = Usuario.objects.get(numero_documento=numero_documento)
+        form = FormularioIngreso(request.POST)
+        if form.is_valid():
+            numero_documento = form.cleaned_data['numero_documento']
+            password = form.cleaned_data['password']
             
-            # Si existe pero no está activo
-            if not usuario.is_active:
-                messages.warning(
-                    request, 
-                    'Tu cuenta no está activada. Por favor, actívala para continuar.'
-                )
-                return redirect('reenviar_activacion')
-            
-            # Si está activo, intentamos autenticar
-            usuario_auth = authenticate(request, numero_documento=numero_documento, password=password)
-            if usuario_auth is not None:
-                login(request, usuario_auth)
-                return redirect('inicio')
-            else:
-                messages.error(request, 'Contraseña incorrecta.')
+            try:
+                usuario = Usuario.objects.get(numero_documento=numero_documento)
                 
-        except Usuario.DoesNotExist:
-            messages.error(request, 'No existe un usuario con ese número de documento.')
+                if not usuario.is_active:
+                    messages.warning(
+                        request, 
+                        'Tu cuenta no está activada. Por favor, actívala para continuar.'
+                    )
+                    return redirect('reenviar_activacion')
+                
+                usuario_auth = authenticate(
+                    request, 
+                    numero_documento=numero_documento, 
+                    password=password
+                )
+                
+                if usuario_auth is not None:
+                    login(request, usuario_auth)
+                    return redirect('inicio')
+                else:
+                    messages.error(request, 'Contraseña incorrecta.')
+                    
+            except Usuario.DoesNotExist:
+                messages.error(request, 'No existe un usuario con ese número de documento.')
         
-        return render(request, self.template_name)
-    
+        return render(request, self.template_name, {'form': form})
+
 class InicioView(BaseView):
     template_name = 'usuarios/inicio.html'
     
     def get(self, request):
+        if not request.user.is_authenticated:
+            return redirect('ingreso')
         return render(request, self.template_name)
-
