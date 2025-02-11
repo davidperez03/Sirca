@@ -28,7 +28,7 @@ SECRET_KEY = env('SECRET_KEY', default='clave_por_defecto')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ["*"]
 
 
 # Application definition

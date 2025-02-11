@@ -3,6 +3,8 @@ from django.conf import settings
 from django.urls import reverse
 from django.utils import timezone  # Añade esta línea
 from .models import AuditoriaRegistro 
+from django.urls import reverse
+from django.utils.timezone import now
 
 def enviar_correo_activacion(usuario):
     subject = 'Activa tu cuenta'
@@ -17,11 +19,6 @@ def enviar_correo_activacion(usuario):
         accion='Correo de activación enviado',
         detalles=f'Correo enviado a {usuario.correo_institucional}'
     )
-
-from django.core.mail import send_mail
-from django.conf import settings
-from django.urls import reverse
-from django.utils.timezone import now
 
 def enviar_correo_recuperacion(usuario):
     subject = 'Recuperación de contraseña'
