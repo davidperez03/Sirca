@@ -48,14 +48,14 @@
 
                 <div class="text-center mt-4">
                     <p class="mb-2">¿No tienes una cuenta?</p>
-                    <a href="{% url 'registro' %}" class="btn btn-outline-primary w-100 d-flex align-items-center justify-content-center py-2">
+                    <a href="{% url 'usuarios:registro' %}" class="btn btn-outline-primary w-100 d-flex align-items-center justify-content-center py-2">
                         <i class="bi bi-person-plus me-2"></i> Regístrate aquí
                     </a>
 
                     <hr class="my-3">
 
                     <p class="mb-2">¿Olvidaste tu contraseña?</p>
-                    <a href="{% url 'recuperar_password' %}" class="btn btn-outline-secondary w-100 d-flex align-items-center justify-content-center py-2">
+                    <a href="{% url 'usuarios:recuperar_password' %}" class="btn btn-outline-secondary w-100 d-flex align-items-center justify-content-center py-2">
                         <i class="bi bi-unlock me-2"></i> Recuperar contraseña
                     </a>
                 </div>

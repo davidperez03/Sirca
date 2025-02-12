@@ -4,10 +4,10 @@
 <h2>Activación de Cuenta</h2>
 
 {% if cuenta_activada %}
-    <p>¡Tu cuenta ha sido activada exitosamente! Ahora puedes <a href="{% url 'ingreso' %}">iniciar sesión</a>.</p>
+    <p>¡Tu cuenta ha sido activada exitosamente! Ahora puedes <a href="{% url 'usuarios:ingreso' %}">iniciar sesión</a>.</p>
 {% else %}
     <p>Hubo un problema con la activación de tu cuenta. El enlace no es válido o tu cuenta ya estaba activa.</p>
 {% endif %}
 
-<a href="{% url 'ingreso' %}">Ir a iniciar sesión</a>
+<a href="{% url 'usuarios:ingreso' %}">Ir a iniciar sesión</a>
 {% endblock %}

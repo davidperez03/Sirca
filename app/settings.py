@@ -41,7 +41,8 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     # Aplicaciones locales
     'portal',
-    'usuarios'
+    'usuarios',
+    'interfaz',
 ]
 
 MIDDLEWARE = [

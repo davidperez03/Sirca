@@ -1,5 +1,5 @@
 from django.shortcuts import render, redirect
-from django.contrib.auth import authenticate, login
+from django.contrib.auth import authenticate, login, logout
 from django.contrib import messages
 from django.views import View
 from django.conf import settings
@@ -397,7 +397,7 @@ class IngresoView(BaseView):
                 
                 if usuario_auth is not None:
                     login(request, usuario_auth)
-                    return redirect('inicio')
+                    return redirect('interfaz:inicio')
                 else:
                     messages.error(request, 'Contraseña incorrecta.')
                     
@@ -405,11 +405,9 @@ class IngresoView(BaseView):
                 messages.error(request, 'No existe un usuario con ese número de documento.')
         
         return render(request, self.template_name, {'form': form})
-
-class InicioView(BaseView):
-    template_name = 'usuarios/inicio.html'
     
+class SalirView(BaseView):
     def get(self, request):
-        if not request.user.is_authenticated:
-            return redirect('ingreso')
-        return render(request, self.template_name)
+        logout(request)
+        messages.success(request, "Has cerrado sesión correctamente.")
+        return redirect('usuarios:ingreso')
