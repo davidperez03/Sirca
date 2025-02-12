@@ -1,10 +1,7 @@
 from django.core.mail import send_mail
 from django.conf import settings
 from django.urls import reverse
-from django.utils import timezone  # Añade esta línea
 from .models import AuditoriaRegistro 
-from django.urls import reverse
-from django.utils.timezone import now
 
 def enviar_correo_activacion(usuario):
     subject = 'Activa tu cuenta'
