@@ -51,12 +51,15 @@
             <div class="d-flex flex-column align-items-center">
                 {% for message in messages %}
                     <div class="alert alert-{% if message.tags == 'error' %}danger{% else %}{{ message.tags }}{% endif %} 
-                                alert-dismissible fade show shadow-sm rounded-3 px-4 py-3 d-flex align-items-center w-75" 
-                         role="alert">
-                        
-                        <!-- Ícono dinámico según el tipo de alerta -->
-                        <i class="me-2 fs-5 {% if message.tags == 'success' %}bi bi-check-circle-fill text-success{% elif message.tags == 'danger' or message.tags == 'error' %}bi bi-x-circle-fill text-danger{% elif message.tags == 'warning' %}bi bi-exclamation-triangle-fill text-warning{% elif message.tags == 'info' %}bi bi-info-circle-fill text-info{% endif %}"></i>
-                        
+                    alert-dismissible fade show shadow-sm rounded-3 px-4 py-3 d-flex align-items-center w-75" role="alert">
+        
+            <!-- Iconos dinámicos según el tipo de mensaje -->
+                        <i class="bi 
+                            {% if message.tags == 'error' %}bi-exclamation-triangle-fill
+                            {% elif message.tags == 'success' %}bi-check-circle-fill
+                            {% elif message.tags == 'warning' %}bi-exclamation-circle-fill
+                            {% elif message.tags == 'info' %}bi-info-circle-fill{% endif %} 
+                            me-2 fs-5"></i>
                         <!-- Texto del mensaje -->
                         <div class="flex-grow-1">{{ message }}</div>
     

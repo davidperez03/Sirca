@@ -61,8 +61,8 @@ class Usuario(AbstractUser):
     contador_reenvios = models.IntegerField(default=0)
     ultimo_reenvio = models.DateTimeField(null=True, blank=True)
 
-    reset_password_token = models.UUIDField(null=True, blank=True)
-    reset_password_token_created = models.DateTimeField(null=True, blank=True)
+    token_restablecimiento_contraseña = models.UUIDField(null=True, blank=True)  
+    token_restablecimiento_creado = models.DateTimeField(null=True, blank=True)  
 
     def generar_nuevo_token(self):
         """
@@ -70,8 +70,8 @@ class Usuario(AbstractUser):
         """
         self.activation_token = uuid.uuid4()
         self.activation_token_created = timezone.now()
-        # Token válido por 24 horas
-        self.token_expiracion = self.activation_token_created + timezone.timedelta(hours=24)
+        # Token válido por 6 horas
+        self.token_expiracion = self.activation_token_created + timezone.timedelta(hours=6)
 
     USERNAME_FIELD = 'numero_documento'
     REQUIRED_FIELDS = ['tipo_documento', 'correo_institucional', 'nombres', 'apellidos']

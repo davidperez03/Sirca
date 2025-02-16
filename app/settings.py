@@ -210,3 +210,9 @@ CACHES = {
 }
 
 MAX_ACTIVATION_RESENDS = 3  
+
+SESSION_ENGINE = "django.contrib.sessions.backends.db"  # Guarda sesiones en la BD
+SESSION_COOKIE_AGE = 1800  # La sesión expira en 30 minutos
+SESSION_EXPIRE_AT_BROWSER_CLOSE = True  # Expira al cerrar el navegador
+SESSION_COOKIE_HTTPONLY = True  # Evita acceso desde JS
+SESSION_SAVE_EVERY_REQUEST = True  # Actualiza la sesión en cada petición

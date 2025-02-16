@@ -17,7 +17,6 @@ from uuid import UUID
 import uuid
 import logging
 
-
 from .forms import( 
     FormularioCreacionUsuario, 
     FormularioReenvioActivacion,
@@ -50,7 +49,7 @@ def rate_limit(key_prefix, limit=5, period=300):
             if attempts >= limit:
                 logger.warning(f"Rate limit exceeded for IP: {client_ip}")
                 messages.error(request, 'Has excedido el límite de intentos. Espera unos minutos.')
-                return redirect('ingreso')
+                return redirect('usuarios:ingreso')
             
             response = view_func(request, *args, **kwargs)
             
@@ -141,7 +140,7 @@ class RegistroUsuarioView(BaseView):
                         usuario=usuario
                     )
                     
-                    return redirect(reverse('confirmacion_registro'))
+                    return redirect(reverse('usuarios:confirmacion_registro'))
                     
             except Exception as e:
                 logger.error(f"Error en registro: {str(e)}")
@@ -176,7 +175,7 @@ class ActivarCuentaView(BaseView):
                         level='WARNING'
                     )
                     messages.error(request, 'El enlace de activación ha expirado. Por favor, solicita uno nuevo.')
-                    return redirect('reenviar_activacion')
+                    return redirect('usuarios:reenviar_activacion')
                 
                 usuario.is_active = True
                 usuario.activation_token = None
@@ -201,7 +200,7 @@ class ActivarCuentaView(BaseView):
             logger.error(f"Error en activación de cuenta: {str(e)}")
             messages.error(request, 'Ocurrió un error al activar la cuenta. Por favor, intenta nuevamente.')
         
-        return redirect('ingreso')
+        return redirect('usuarios:ingreso')
 
 class ReenviarActivacionView(BaseView):
     template_name = 'usuarios/reenviar_activacion.html'
@@ -276,7 +275,6 @@ class ReenviarActivacionView(BaseView):
         messages.success(request, mensaje_generico)
         return render(request, self.template_name, {'form': form})
 
-
 class RecuperarPasswordView(BaseView):
     template_name = 'usuarios/recuperar_password.html'
     
@@ -297,8 +295,8 @@ class RecuperarPasswordView(BaseView):
                     correo_institucional=correo
                 )
                 
-                usuario.reset_password_token = uuid.uuid4()
-                usuario.reset_password_token_created = timezone.now()
+                usuario.token_restablecimiento_contraseña = uuid.uuid4()
+                usuario.token_restablecimiento_creado = timezone.now()
                 usuario.save()
                 
                 enviar_correo_recuperacion(usuario)
@@ -325,46 +323,56 @@ class ResetearPasswordView(BaseView):
 
     def get(self, request, token):
         try:
-            usuario = Usuario.objects.get(reset_password_token=token)
+            usuario = Usuario.objects.get(token_restablecimiento_contraseña=token)
             
-            tiempo_limite = usuario.reset_password_token_created + timezone.timedelta(minutes=30)
+            tiempo_limite = usuario.token_restablecimiento_creado + timezone.timedelta(minutes=30)
             if timezone.now() > tiempo_limite:
                 messages.error(request, "El enlace de recuperación ha expirado.")
-                return redirect('recuperar_password')
+                return redirect('usuarios:recuperar_password')
 
             form = FormularioResetearPassword()
             return render(request, self.template_name, {'form': form, 'token': token})
 
         except Usuario.DoesNotExist:
             messages.error(request, "El enlace de recuperación no es válido.")
-            return redirect('recuperar_password')
+            return redirect('usuarios:recuperar_password')
 
     @transaction.atomic
     def post(self, request, token):
         form = FormularioResetearPassword(request.POST)
+
         if form.is_valid():
-            try:
-                usuario = Usuario.objects.get(reset_password_token=token)
-                
-                tiempo_limite = usuario.reset_password_token_created + timezone.timedelta(minutes=30)
-                if timezone.now() > tiempo_limite:
-                    messages.error(request, "El enlace de recuperación ha expirado.")
-                    return redirect('recuperar_password')
+            password = form.cleaned_data['password']
+            confirmar_password = form.cleaned_data['confirmar_password']
 
-                usuario.set_password(form.cleaned_data['password'])
-                usuario.reset_password_token = None
-                usuario.reset_password_token_created = None
-                usuario.save()
+            # Validación de contraseñas en la vista
+            if password != confirmar_password:
+                form.add_error('confirmar_password', 'Las contraseñas no coinciden')
 
-                messages.success(request, "Tu contraseña ha sido actualizada con éxito.")
-                return redirect('ingreso')
+            if not form.errors:
+                try:
+                    usuario = Usuario.objects.get(token_restablecimiento_contraseña=token)
+                    
+                    tiempo_limite = usuario.token_restablecimiento_creado + timezone.timedelta(minutes=30)
+                    if timezone.now() > tiempo_limite:
+                        messages.error(request, "El enlace de recuperación ha expirado.")
+                        return redirect('usuarios:recuperar_password')
 
-            except Usuario.DoesNotExist:
-                messages.error(request, "El enlace de recuperación no es válido.")
-                return redirect('recuperar_password')
-        
+                    # Actualizar la contraseña del usuario
+                    usuario.set_password(password)
+                    usuario.token_restablecimiento_contraseña = None
+                    usuario.token_restablecimiento_creado = None
+                    usuario.save()
+
+                    messages.success(request, "Tu contraseña ha sido actualizada con éxito.")
+                    return redirect('usuarios:ingreso')
+
+                except Usuario.DoesNotExist:
+                    messages.error(request, "El enlace de recuperación no es válido.")
+                    return redirect('usuarios:recuperar_password')
+
+        # Si el formulario no es válido o si tiene errores, vuelve a renderizarlo
         return render(request, self.template_name, {'form': form, 'token': token})
-
 
 class IngresoView(BaseView):
     template_name = 'usuarios/ingreso.html'
@@ -383,11 +391,8 @@ class IngresoView(BaseView):
                 usuario = Usuario.objects.get(numero_documento=numero_documento)
                 
                 if not usuario.is_active:
-                    messages.warning(
-                        request, 
-                        'Tu cuenta no está activada. Por favor, actívala para continuar.'
-                    )
-                    return redirect('reenviar_activacion')
+                    messages.warning(request, 'Tu cuenta no está activada. Por favor, actívala para continuar.')
+                    return redirect('usuarios:reenviar_activacion')
                 
                 usuario_auth = authenticate(
                     request, 

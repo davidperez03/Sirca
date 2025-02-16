@@ -5,7 +5,7 @@ from .models import AuditoriaRegistro
 
 def enviar_correo_activacion(usuario):
     subject = 'Activa tu cuenta'
-    activation_link = f"{settings.BASE_URL}{reverse('activar_cuenta', args=[str(usuario.activation_token)])}"
+    activation_link = f"{settings.BASE_URL}{reverse('usuarios:activar_cuenta', args=[str(usuario.activation_token)])}"
     message = f'Hola {usuario.nombres},\n\nPor favor, activa tu cuenta haciendo clic en el siguiente enlace:\n\n{activation_link}'
     email_from = settings.EMAIL_HOST_USER
     recipient_list = [usuario.correo_institucional]
@@ -19,7 +19,7 @@ def enviar_correo_activacion(usuario):
 
 def enviar_correo_recuperacion(usuario):
     subject = 'Recuperación de contraseña'
-    reset_link = f"{settings.BASE_URL}{reverse('resetear_password', args=[str(usuario.reset_password_token)])}"
+    reset_link = f"{settings.BASE_URL}{reverse('usuarios:resetear_password', args=[str(usuario.token_restablecimiento_contraseña)])}"
     message = (
         f'Hola {usuario.nombres},\n\n'
         f'Hemos recibido una solicitud para restablecer tu contraseña.\n'
