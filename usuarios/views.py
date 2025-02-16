@@ -316,7 +316,6 @@ class RecuperarPasswordView(BaseView):
         
         messages.success(request, mensaje_generico)
         return render(request, self.template_name, {'form': form})
-    
 
 class ResetearPasswordView(BaseView):
     template_name = 'usuarios/resetear_password.html'
@@ -416,3 +415,4 @@ class SalirView(BaseView):
         logout(request)
         messages.success(request, "Has cerrado sesión correctamente.")
         return redirect('usuarios:ingreso')
+    
