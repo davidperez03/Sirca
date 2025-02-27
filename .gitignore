@@ -1,0 +1,42 @@
+# Archivos del sistema operativo
+.DS_Store
+Thumbs.db
+
+# Archivos de Python
+*.pyc
+*.pyo
+*.pyd
+__pycache__/
+env/
+.venv/
+
+# Archivos de base de datos
+*.sqlite3
+
+# Archivos de logs
+*.log
+
+# Archivos de configuraciones de entorno
+.env
+.env.*
+*.env
+
+# Archivos de migraciones de Django
+migrations/
+
+# Archivos de archivos estáticos y medios
+/static/
+/media/
+
+# Archivos de cobertura de pruebas
+.coverage
+*.coveragerc
+
+# Archivos de editor (IDE)
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
+
+# Archivos de PyCharm
+*.iml
